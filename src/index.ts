@@ -258,10 +258,15 @@ class Index extends Recorder {
      * @memberof Recorder
      */
     getWAV(): any {
-        let pcmTemp = this.getPCM();
-
+        // 先停止
+        this.stop();
+        // 获取pcm数据
+        let data: any = this.getData();
+        // 根据输入输出比例 压缩或扩展
+        // data = compress(data, this.inputSampleRate, this.outputSampleRate);
+        data = data.left;
         // PCM增加44字节的头就是WAV格式了
-        return encodeWAV(pcmTemp, this.inputSampleRate,
+        return encodeWAV(data, this.inputSampleRate,
             this.outputSampleRate, this.config.numChannels, this.oututSampleBits, this.littleEdian);;
     }
 

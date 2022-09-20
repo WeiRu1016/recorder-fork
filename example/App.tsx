@@ -151,35 +151,35 @@ class App extends React.Component {
                 this.stopDrawPlay();
             }
 
-            // 定时获取录音的数据并播放
-            config.compiling && (playTimer = setInterval(() => {
-                if (!recorder) {
-                    return;
-                }
+            // // 定时获取录音的数据并播放
+            // config.compiling && (playTimer = setInterval(() => {
+            //     if (!recorder) {
+            //         return;
+            //     }
 
-                let newData = recorder.getNextData();
-                if (!newData.length) {
-                    return;
-                }
-                let byteLength = newData[0].byteLength
-                let buffer = new ArrayBuffer(newData.length * byteLength)
-                let dataView = new DataView(buffer)
+            //     let newData = recorder.getNextData();
+            //     if (!newData.length) {
+            //         return;
+            //     }
+            //     let byteLength = newData[0].byteLength
+            //     let buffer = new ArrayBuffer(newData.length * byteLength)
+            //     let dataView = new DataView(buffer)
 
-                    // 数据合并
-                for (let i = 0, iLen = newData.length; i < iLen; ++i) {
-                    for (let j = 0, jLen = newData[i].byteLength; j < jLen; ++j) {
-                        dataView.setInt8(i * byteLength + j, newData[i].getInt8(j))
-                    }
-                }
+            //         // 数据合并
+            //     for (let i = 0, iLen = newData.length; i < iLen; ++i) {
+            //         for (let j = 0, jLen = newData[i].byteLength; j < jLen; ++j) {
+            //             dataView.setInt8(i * byteLength + j, newData[i].getInt8(j))
+            //         }
+            //     }
 
-                // 将录音数据转成WAV格式，并播放
-                let a = encodeWAV(dataView, config.sampleRate, config.sampleRate, config.numChannels, config.sampleBits)
-                let blob: any = new Blob([ a ], { type: 'audio/wav' });
+            //     // 将录音数据转成WAV格式，并播放
+            //     let a = encodeWAV(dataView, config.sampleRate, config.sampleRate, config.numChannels, config.sampleBits)
+            //     let blob: any = new Blob([ a ], { type: 'audio/wav' });
 
-                blob.arrayBuffer().then((arraybuffer) => {
-                    Player.play(arraybuffer);
-                });
-            }, 3000))
+            //     blob.arrayBuffer().then((arraybuffer) => {
+            //         Player.play(arraybuffer);
+            //     });
+            // }, 3000))
         } else {
             recorder.stop();
         }
