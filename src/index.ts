@@ -224,7 +224,8 @@ class Index extends Recorder {
         // 获取pcm数据
         let data: any = this.getData();
         // 根据输入输出比例 压缩或扩展
-        data = compress(data, this.inputSampleRate, this.outputSampleRate);
+        data = data.left;
+        // data = compress(data, this.inputSampleRate, this.outputSampleRate);
         // 按采样位数重新编码
         return encodePCM(data, this.oututSampleBits, this.littleEdian);
     }

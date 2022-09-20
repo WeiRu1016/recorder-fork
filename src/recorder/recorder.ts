@@ -57,7 +57,7 @@ export default class Recorder {
      */
     constructor(options: recorderConfig = {}) {
         // 临时audioContext，为了获取输入采样率的
-        let context = new (window.AudioContext || window.webkitAudioContext)();
+        let context = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: options.sampleRate });
 
         this.inputSampleRate = context.sampleRate;     // 获取当前输入的采样率
 
@@ -244,7 +244,7 @@ export default class Recorder {
         // 清空数据
         this.clearRecordStatus();
 
-        this.context = new (window.AudioContext || window.webkitAudioContext)();
+        this.context = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: this.config.sampleRate });
 
         this.analyser = this.context.createAnalyser();  // 录音分析节点
         this.analyser.fftSize = 2048;                   // 表示存储频域的大小
