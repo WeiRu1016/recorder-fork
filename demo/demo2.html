@@ -114,6 +114,7 @@
             });
             navigator.mediaDevices.getUserMedia({
                 audio: {
+                    sampleRate: inputSampleRate,
                     noiseSuppression: false, //默认禁用降噪，原声录制，免得移动端表现怪异（包括系统播放声音变小）
 			        echoCancellation: false //回声消除
                 }
