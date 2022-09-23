@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo2</title>
+</head>
+<body>
+    <div>
+        <div id="time">时间：0s</div>
+        <button onclick="startRecord()">录音</button>
+        <button onclick="stopRecord()">暂停</button>
+        <button onclick="download()">下载</button>
+    </div>
+    <script>
+        var time$ = document.getElementById('time');
+        var duration = 0;
+        var isRecording = false;
+        var context = null;
+        var recorder = null;
+        var mediaStream = null;
+        var mediaStreamSource = null;
+        var buffers = [];
+        var inputSampleRate = 48000;
+        var outputSampleRate = 16000;
+        function compress(pcmDatas, pcmSampleRate, newSampleRate) {
+            var size=0;
+            for(var i=0;i<pcmDatas.length;i++){
+                size+=pcmDatas[i].length;
+            };
+            
+            var step=newSampleRate/pcmSampleRate;
+            if(step<=1){//新采样不高于pcm采样率不处理
+                step=1;
+                newSampleRate=pcmSampleRate;
+            }else{
+                size=Math.floor(size*step);
+            };
+            
+            var res=new Int16Array(size);
+            
+            //处理数据
+            var posFloat=0,prev=0;
+            for (var index=0,nl=pcmDatas.length;index<nl;index++) {
+                var arr=pcmDatas[index];
+                for(var i=0;i<arr.length;i++){
+                    var cur=arr[i];
+                    
+                    var pos=Math.floor(posFloat);
+                    posFloat+=step;
+                    var end=Math.floor(posFloat);
+                    
+                    //简单的从prev平滑填充到cur，有效减少转换引入的杂音
+                    var n=(cur-prev)/(end-pos);
+                    for(var j=1;pos<end;pos++,j++){
+                        //res[pos]=cur;
+                        res[pos]=Math.floor(prev+(j*n));
+                    };
+                    
+                    prev=cur;
+                };
+            };
+            
+            return {
+                sampleRate: newSampleRate,
+                data:res
+            };
+        };
+
+        function startRecord() {
+            if (isRecording) {
+                return;
+            }
+            isRecording = true;
+            context = new AudioContext({ sampleRate: inputSampleRate });
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+                mediaStream = stream;
+                mediaStreamSource = context.createMediaStreamSource(stream)
+                processor = context.createScriptProcessor(4096, 1, 1);
+                mediaStreamSource.connect(processor);
+                processor.connect(context.destination);
+
+                processor.onaudioprocess = (e) => {
+                    if (!isRecording) {
+                        return;
+                    }
+                    const float32Arr = e.inputBuffer.getChannelData(0);
+
+                    const size= float32Arr.length;
+                    const pcm = new Int16Array(size);
+                    let sum=0;
+                    for(let j=0;j<size;j++){//floatTo16BitPCM 
+                        let s=Math.max(-1,Math.min(1,float32Arr[j]));
+                        s=s<0?s*0x8000:s*0x7FFF;
+                        pcm[j]=s;
+                        sum+=Math.abs(s);
+                    };
+
+                    buffers.push(pcm);
+
+                    duration += 4096 / inputSampleRate;
+                    time$.innerHTML = `时间${duration}`;
+                }
+            }).catch((err) => {
+                console.error(err);
+                isRecording = false;
+            })
+        }
+        function stopRecord() {
+            if (mediaStream) {
+                mediaStream.getAudioTracks().forEach((track) => {
+                    return track.stop();
+                });
+            }
+            mediaStreamSource && mediaStreamSource.disconnect();
+            processor && processor.disconnect();
+            context && context.close();
+
+            mediaStream = null;
+            mediaStreamSource = null;
+            context = null;
+            processor = null;
+            isRecording = false;          
+        }
+        function download() {
+            const result = compress(buffer, outputSampleRate, inputSampleRate);
+
+            const buffer = new ArrayBuffer(result.length*2);
+            const data = new DataView(buffer);
+            offset = 0;
+            for (let i = 0;i < size; i++, offset += 2){
+                data.setInt16(offset, result[i], true);
+            }
+
+            const blob = new Blob([data]);
+
+            let oA = document.createElement('a');
+
+            oA.href = window.URL.createObjectURL(blob);
+            oA.download = `recorder-demo2.pcm`;
+            oA.click();
+        }
+    </script>
+</body>
+</html>

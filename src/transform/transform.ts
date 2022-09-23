@@ -38,7 +38,7 @@ function writeString(data, offset, str): void {
  */
 export function compress(data, recordSampleRate: number, exportSampleRate: number) {
     const buffer = data.left;
-    if (exportSampleRate === recordSampleRate) {
+    if (exportSampleRate <= recordSampleRate) {
         return buffer;
     }
     var sampleRateRatio = recordSampleRate / exportSampleRate;

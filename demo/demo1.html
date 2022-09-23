@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo1</title>
+</head>
+<body>
+    <div>
+        <div id="time">时间：0s</div>
+        <button onclick="startRecord()">录音</button>
+        <button onclick="stopRecord()">暂停</button>
+        <button onclick="download()">下载</button>
+    </div>
+    <script>
+        var time$ = document.getElementById('time');
+        var duration = 0;
+        var isRecording = false;
+        var context = null;
+        var recorder = null;
+        var mediaStream = null;
+        var mediaStreamSource = null;
+        var buffers = [];
+        var inputSampleRate = 16000;
+        var outputSampleRate = 16000;
+        function startRecord() {
+            if (isRecording) {
+                return;
+            }
+            isRecording = true;
+            context = new AudioContext({ sampleRate: inputSampleRate });
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+                mediaStream = stream;
+                mediaStreamSource = context.createMediaStreamSource(stream)
+                processor = context.createScriptProcessor(4096, 1, 1);
+                mediaStreamSource.connect(processor);
+                processor.connect(context.destination);
+
+                processor.onaudioprocess = (e) => {
+                    if (!isRecording) {
+                        return;
+                    }
+                    const data = e.inputBuffer.getChannelData(0);
+                    buffers.push(new Float32Array(data));
+                    duration += 4096 / inputSampleRate;
+                    time$.innerHTML = `时间${duration}`;
+                }
+            }).catch((err) => {
+                console.error(err);
+                isRecording = false;
+            })
+        }
+        function stopRecord() {
+            if (mediaStream) {
+                mediaStream.getAudioTracks().forEach((track) => {
+                    return track.stop();
+                });
+            }
+            mediaStreamSource && mediaStreamSource.disconnect();
+            processor && processor.disconnect();
+            context && context.close();
+
+            mediaStream = null;
+            mediaStreamSource = null;
+            context = null;
+            processor = null;
+            isRecording = false;          
+        }
+        function download() {
+            const size = buffers.reduce((p, i) => p + i.length, 0);
+            const result = new Float32Array(size);
+            let offset = 0;
+            for (let i = 0; i < buffers.length; i++) {
+                result.set(buffers[i], offset);
+                offset += buffers[i].length;
+            }
+
+            offset = 0;
+            const dataLength = result.length * 2;
+            const buffer = new ArrayBuffer(dataLength);
+            const data = new DataView(buffer);
+            for (let i = 0; i < result.length; i++, offset += 2) {
+                let s = Math.max(-1, Math.min(1, result[i]));
+                data.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+            }
+            const blob = new Blob([data]);
+
+            let oA = document.createElement('a');
+
+            oA.href = window.URL.createObjectURL(blob);
+            oA.download = `recorder-demo1.pcm`;
+            oA.click();
+        }
+    </script>
+</body>
+</html>

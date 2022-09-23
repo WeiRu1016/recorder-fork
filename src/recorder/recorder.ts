@@ -5,6 +5,7 @@ declare let Math: any;
 declare let navigator: any;
 declare let Promise: any;
 
+let _id = 0;
 // 构造函数参数格式
 interface recorderConfig {
     sampleBits?: number,        // 采样位数
@@ -57,7 +58,7 @@ export default class Recorder {
      */
     constructor(options: recorderConfig = {}) {
         // 临时audioContext，为了获取输入采样率的
-        let context = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: options.sampleRate });
+        let context = new (window.AudioContext || window.webkitAudioContext)();
 
         this.inputSampleRate = context.sampleRate;     // 获取当前输入的采样率
 
@@ -244,7 +245,7 @@ export default class Recorder {
         // 清空数据
         this.clearRecordStatus();
 
-        this.context = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: this.config.sampleRate });
+        this.context = new (window.AudioContext || window.webkitAudioContext)();
 
         this.analyser = this.context.createAnalyser();  // 录音分析节点
         this.analyser.fftSize = 2048;                   // 表示存储频域的大小
@@ -265,8 +266,9 @@ export default class Recorder {
                 rData = null,
                 vol = 0;        // 音量百分比
 
+            _id += 1;
+            let tempId = _id;
             this.lBuffer.push(new Float32Array(lData));
-
             this.size += lData.length;
 
             // 判断是否有右声道数据
@@ -305,6 +307,10 @@ export default class Recorder {
                 vol,
                 // data: this.tempPCM,     // 当前所有的pcm数据，调用者控制增量
             });
+
+            if (_id !== tempId) {
+                console.error('baomax:数据被覆盖！！！');
+            }
         }
     }
 
