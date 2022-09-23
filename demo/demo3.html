@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Demo1</title>
+    <title>Demo3</title>
 </head>
 <body>
     <div>
@@ -22,8 +22,28 @@
         var mediaStream = null;
         var mediaStreamSource = null;
         var buffers = [];
-        var inputSampleRate = 16000;
+        var inputSampleRate = 48000;
         var outputSampleRate = 16000;
+        function compress(buffer, recordSampleRate, exportSampleRate) {
+            var sampleRateRatio = recordSampleRate / exportSampleRate;
+            var newLength = Math.round(buffer.length / sampleRateRatio);
+            var result = new Float32Array(newLength);
+            var offsetResult = 0;
+            var offsetBuffer = 0;
+            while (offsetResult < result.length) {
+                var nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
+                var accum = 0,
+                    count = 0;
+                for (var i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+                    accum += buffer[i];
+                    count++;
+                }
+                result[offsetResult] = accum / count;
+                offsetResult++;
+                offsetBuffer = nextOffsetBuffer;
+            }
+            return result;
+        }
         function startRecord() {
             if (isRecording) {
                 return;
@@ -76,19 +96,26 @@
                 offset += buffers[i].length;
             }
 
-            const int16Arr = new Int16Array(size);
-            for (let i = 0; i < size; i++) {
-                let s = Math.max(-1, Math.min(1, result[i]));
-                s = s < 0 ? s * 0x8000 : s * 0x7fff;
-                int16Arr[i] = s;
+            const temp = compress(result, inputSampleRate, outputSampleRate);
+            offset = 0;
+            const dataLength = temp.length * 2;
+            const buffer = new ArrayBuffer(dataLength);
+            const data = new DataView(buffer);
+
+
+            for (let i = 0; i < temp.length; i++, offset += 2) {
+                let s = Math.max(-1, Math.min(1, temp[i]));
+                // 16位的划分的是2^16=65536份，范围是-32768到32767
+                // 因为我们收集的数据范围在[-1,1]，那么你想转换成16位的话，只需要对负数*32768,对正数*32767,即可得到范围在[-32768,32767]的数据。
+                data.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
             }
 
-            const blob = new Blob([int16Arr]);
+            const blob = new Blob([data]);
 
             let oA = document.createElement('a');
 
             oA.href = window.URL.createObjectURL(blob);
-            oA.download = `recorder-demo1.pcm`;
+            oA.download = `recorder-demo3.pcm`;
             oA.click();
         }
     </script>

@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Demo2</title>
 </head>
+
 <body>
     <div>
         <div id="time">时间：0s</div>
@@ -24,47 +26,81 @@
         var buffers = [];
         var inputSampleRate = 48000;
         var outputSampleRate = 16000;
-        function compress(pcmDatas, pcmSampleRate, newSampleRate) {
-            var size=0;
-            for(var i=0;i<pcmDatas.length;i++){
-                size+=pcmDatas[i].length;
+
+        function compress(pcmDatas,pcmSampleRate,newSampleRate,prevChunkInfo,option) {
+            prevChunkInfo || (prevChunkInfo = {});
+            var index = prevChunkInfo.index || 0;
+            var offset = prevChunkInfo.offset || 0;
+
+            var frameNext = prevChunkInfo.frameNext || [];
+            option || (option = {});
+            var frameSize = option.frameSize || 1;
+
+            var nLen = pcmDatas.length;
+            var size = 0;
+            for (var i = index; i < nLen; i++) {
+                size += pcmDatas[i].length;
             };
-            
-            var step=newSampleRate/pcmSampleRate;
-            if(step<=1){//新采样不高于pcm采样率不处理
-                step=1;
-                newSampleRate=pcmSampleRate;
-            }else{
-                size=Math.floor(size*step);
+            size = Math.max(0, size - Math.floor(offset));
+
+            //采样 https://www.cnblogs.com/blqw/p/3782420.html
+            var step = pcmSampleRate / newSampleRate;
+            if (step > 1) { //新采样低于录音采样，进行抽样
+                size = Math.floor(size / step);
+            } else { //新采样高于录音采样不处理，省去了插值处理
+                step = 1;
+                newSampleRate = pcmSampleRate;
             };
-            
-            var res=new Int16Array(size);
-            
+
+            size += frameNext.length;
+            var res = new Int16Array(size);
+            var idx = 0;
+            //添加上一次不够一帧的剩余数据
+            for (var i = 0; i < frameNext.length; i++) {
+                res[idx] = frameNext[i];
+                idx++;
+            };
             //处理数据
-            var posFloat=0,prev=0;
-            for (var index=0,nl=pcmDatas.length;index<nl;index++) {
-                var arr=pcmDatas[index];
-                for(var i=0;i<arr.length;i++){
-                    var cur=arr[i];
-                    
-                    var pos=Math.floor(posFloat);
-                    posFloat+=step;
-                    var end=Math.floor(posFloat);
-                    
-                    //简单的从prev平滑填充到cur，有效减少转换引入的杂音
-                    var n=(cur-prev)/(end-pos);
-                    for(var j=1;pos<end;pos++,j++){
-                        //res[pos]=cur;
-                        res[pos]=Math.floor(prev+(j*n));
-                    };
-                    
-                    prev=cur;
+            for (; index < nLen; index++) {
+                var o = pcmDatas[index];
+                var i = offset,
+                    il = o.length;
+                while (i < il) {
+                    //res[idx]=o[Math.round(i)]; 直接简单抽样
+
+                    //https://www.cnblogs.com/xiaoqi/p/6993912.html
+                    //当前点=当前点+到后面一个点之间的增量，音质比直接简单抽样好些
+                    var before = Math.floor(i);
+                    var after = Math.ceil(i);
+                    var atPoint = i - before;
+
+                    var beforeVal = o[before];
+                    var afterVal = after < il ? o[after] :
+                        ( //后个点越界了，查找下一个数组
+                            (pcmDatas[index + 1] || [beforeVal])[0] || 0
+                        );
+                    res[idx] = beforeVal + (afterVal - beforeVal) * atPoint;
+
+                    idx++;
+                    i += step; //抽样
                 };
+                offset = i - il;
             };
-            
+            //帧处理
+            frameNext = null;
+            var frameNextSize = res.length % frameSize;
+            if (frameNextSize > 0) {
+                var u8Pos = (res.length - frameNextSize) * 2;
+                frameNext = new Int16Array(res.buffer.slice(u8Pos));
+                res = new Int16Array(res.buffer.slice(0, u8Pos));
+            };
+
             return {
+                index: index,
+                offset: offset,
+                frameNext: frameNext,
                 sampleRate: newSampleRate,
-                data:res
+                data: res
             };
         };
 
@@ -73,8 +109,12 @@
                 return;
             }
             isRecording = true;
-            context = new AudioContext({ sampleRate: inputSampleRate });
-            navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            context = new AudioContext({
+                sampleRate: inputSampleRate
+            });
+            navigator.mediaDevices.getUserMedia({
+                audio: true
+            }).then(stream => {
                 mediaStream = stream;
                 mediaStreamSource = context.createMediaStreamSource(stream)
                 processor = context.createScriptProcessor(4096, 1, 1);
@@ -87,14 +127,14 @@
                     }
                     const float32Arr = e.inputBuffer.getChannelData(0);
 
-                    const size= float32Arr.length;
+                    const size = float32Arr.length;
                     const pcm = new Int16Array(size);
-                    let sum=0;
-                    for(let j=0;j<size;j++){//floatTo16BitPCM 
-                        let s=Math.max(-1,Math.min(1,float32Arr[j]));
-                        s=s<0?s*0x8000:s*0x7FFF;
-                        pcm[j]=s;
-                        sum+=Math.abs(s);
+                    let sum = 0;
+                    for (let j = 0; j < size; j++) { //floatTo16BitPCM 
+                        let s = Math.max(-1, Math.min(1, float32Arr[j]));
+                        s = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                        pcm[j] = s;
+                        sum += Math.abs(s);
                     };
 
                     buffers.push(pcm);
@@ -107,6 +147,7 @@
                 isRecording = false;
             })
         }
+
         function stopRecord() {
             if (mediaStream) {
                 mediaStream.getAudioTracks().forEach((track) => {
@@ -121,19 +162,22 @@
             mediaStreamSource = null;
             context = null;
             processor = null;
-            isRecording = false;          
+            isRecording = false;
         }
-        function download() {
-            const result = compress(buffer, outputSampleRate, inputSampleRate);
 
-            const buffer = new ArrayBuffer(result.length*2);
+        function download() {
+            const result = compress(buffers, inputSampleRate, outputSampleRate).data;
+            const size = result.length;
+            const buffer = new ArrayBuffer(size * 2);
             const data = new DataView(buffer);
-            offset = 0;
-            for (let i = 0;i < size; i++, offset += 2){
+            let offset = 0;
+            for (let i = 0; i < size; i++, offset += 2) {
                 data.setInt16(offset, result[i], true);
             }
 
-            const blob = new Blob([data]);
+            const blob = new Blob([data.buffer], {
+                type: 'audio/pcm'
+            });
 
             let oA = document.createElement('a');
 
@@ -141,6 +185,8 @@
             oA.download = `recorder-demo2.pcm`;
             oA.click();
         }
+
     </script>
 </body>
+
 </html>
