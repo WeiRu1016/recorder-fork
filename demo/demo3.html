@@ -51,10 +51,13 @@
             isRecording = true;
             context = new AudioContext({
                 sampleRate: inputSampleRate,
-                noiseSuppression: false, //默认禁用降噪，原声录制，免得移动端表现怪异（包括系统播放声音变小）
-			    echoCancellation: false //回声消除
             });
-            navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            navigator.mediaDevices.getUserMedia({
+                audio: {
+                    noiseSuppression: false, //默认禁用降噪，原声录制，免得移动端表现怪异（包括系统播放声音变小）
+			        echoCancellation: false //回声消除
+                }
+            }).then(stream => {
                 mediaStream = stream;
                 mediaStreamSource = context.createMediaStreamSource(stream)
                 processor = context.createScriptProcessor(4096, 1, 1);
